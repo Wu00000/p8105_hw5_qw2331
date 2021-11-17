@@ -129,3 +129,54 @@ result_df %>%
   )
 ```
 
+
+## Problem 2
+
+**Create a dataframe containing data from all participants**
+```{r}
+file_df <- 
+  tibble(
+    files = list.files("./data/zip_data/")
+  )
+
+longitudial_raw <- 
+  file_df %>% 
+  mutate(
+    file_path = str_c("./data/zip_data/", files),
+    data = map(file_path, read_csv)
+  )
+
+longitudial_df <- 
+  longitudial_raw %>% 
+  separate(files, into = c("arm", "subjectID", sep = "_")) %>%
+  select(arm, subjectID, data) %>% 
+  unnest(data) %>% 
+  pivot_longer(
+    3:10,
+    names_to = "week_num",
+    values_to = "data"
+  )
+
+```
+
+**Make a spaghetti plot for each group**
+```{r, fig.width = 10}
+longitudial_df %>% 
+  mutate(
+    arm = recode(
+      arm,
+      con = "Control",
+      exp = "Experiment"
+    )
+  ) %>% 
+  ggplot(aes(x = week_num, y = data, group = subjectID, color = subjectID)) + 
+  geom_line() + 
+  facet_grid(. ~ arm) + 
+  labs(
+    x = "Number of week",
+    y = "Results",
+    title = "Observations on each subject over time"
+  )
+```
+
+From the above plots, while the results for the subjects in the experiment group increase over time, the results in the control group keep stable in general.
