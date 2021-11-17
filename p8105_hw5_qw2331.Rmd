@@ -3,3 +3,60 @@ title: "p8105_hw5_qw2331"
 output: github_document
 ---
 
+```{r setup, echo = FALSE, message = FALSE}
+library(tidyverse)
+
+knitr::opts_chunk$set(
+  fig.width = 6,
+  fig.asp = .6,
+  out.width = "90%",
+  message = FALSE
+)
+
+theme_set(theme_minimal() + theme(legend.position = "bottom"))
+
+options(
+  ggplot2.continuous.colour = "viridis",
+  ggplot2.continuous.fill = "viridis"
+)
+
+scale_colour_discrete = scale_colour_viridis_d
+scale_fill_discrete = scale_fill_viridis_d
+```
+
+## Problem 1
+
+**Load the data**
+```{r}
+homd_df <- read_csv(
+  "./data/homicide-data.csv",
+  na = c("", "Unknown"))
+```
+
+**A brief description**
+```{r}
+# Using summary or glimpse
+summary(homd_df)
+```
++ This dataset contains ``r nrow(homd_df)`` observations and ``r ncol(homd_df)`` variables with `4` numeric variables and `8` character variables.
++ Of all variables, the key ones are:
+  + `uid` is unique id for each observation;
+  + Variables including ``r colnames(homd_df)[3:7]`` contain the basic demographic information about each victim;
+  + Variables like ``r colnames(homd_df)[8:11]`` represent the location of the killing;
+  + Variable `disposition` includes values like ``r unique(pull(homd_df, disposition))``. A homicide to be considered as `Closed with arrest` when police reported that to be the case, while `Closed without arrest` means there is sufficient evidence but an arrest is impossible. And all other cases were classified as `Open/No arrest`.
+
+**Data mutation**
+```{r}
+homd_df %>% 
+  mutate(
+    city_state = str_c(city, ", ", state),
+    unsolved = as.numeric(disposition != "Closed by arrest")
+  ) %>% 
+  filter(city_state != "Tulsa, AL") %>% 
+  group_by(city_state) %>% 
+  summarize(
+    ttl_homicide = n(),
+    unsol_homicide = sum(unsolved)
+  )
+```
+
