@@ -28,7 +28,7 @@ scale_fill_discrete = scale_fill_viridis_d
 
 **Load the data**
 ```{r}
-homd_df <- read_csv(
+homd_raw <- read_csv(
   "./data/homicide-data.csv",
   na = c("", "Unknown"))
 ```
@@ -36,27 +36,96 @@ homd_df <- read_csv(
 **A brief description**
 ```{r}
 # Using summary or glimpse
-summary(homd_df)
+summary(homd_raw)
 ```
-+ This dataset contains ``r nrow(homd_df)`` observations and ``r ncol(homd_df)`` variables with `4` numeric variables and `8` character variables.
++ This dataset contains ``r nrow(homd_raw)`` observations and ``r ncol(homd_raw)`` variables with `4` numeric variables and `8` character variables.
 + Of all variables, the key ones are:
   + `uid` is unique id for each observation;
-  + Variables including ``r colnames(homd_df)[3:7]`` contain the basic demographic information about each victim;
-  + Variables like ``r colnames(homd_df)[8:11]`` represent the location of the killing;
-  + Variable `disposition` includes values like ``r unique(pull(homd_df, disposition))``. A homicide to be considered as `Closed with arrest` when police reported that to be the case, while `Closed without arrest` means there is sufficient evidence but an arrest is impossible. And all other cases were classified as `Open/No arrest`.
+  + Variables including ``r colnames(homd_raw)[3:7]`` contain the basic demographic information about each victim;
+  + Variables like ``r colnames(homd_raw)[8:11]`` represent the location of the killing;
+  + Variable `disposition` includes values like ``r unique(pull(homd_raw, disposition))``. A homicide to be considered as `Closed with arrest` when police reported that to be the case, while `Closed without arrest` means there is sufficient evidence but an arrest is impossible. And all other cases were classified as `Open/No arrest`.
 
 **Data mutation**
 ```{r}
-homd_df %>% 
+homd_df <- 
+  homd_raw %>% 
   mutate(
     city_state = str_c(city, ", ", state),
-    unsolved = as.numeric(disposition != "Closed by arrest")
+    status = ifelse(disposition == "Closed by arrest", "solved", "unsolved")
   ) %>% 
   filter(city_state != "Tulsa, AL") %>% 
+  relocate(city_state)
+
+homd_df %>% 
   group_by(city_state) %>% 
   summarize(
     ttl_homicide = n(),
-    unsol_homicide = sum(unsolved)
+    unsol_homicide = sum(status == "unsolved")
+  )
+```
+
+**Proportion of homicides estimation for Baltimore, MD**
+```{r}
+# Write a prop_test_function
+prop_test_function <- function(city_df) {
+
+  city_summary <- 
+  city_df %>% 
+  summarize(
+    ttl = n(),
+    unsol = sum(status == "unsolved")
+  )
+
+  city_test <- 
+  prop.test(
+  pull(city_summary, unsol),
+  pull(city_summary, ttl)
+)
+
+  return(city_test)
+  
+}
+
+# Create Baltimore dataframe
+baltimore_df <- 
+  homd_df %>% 
+  filter(city_state == "Baltimore, MD")
+
+prop_test_function(baltimore_df) %>% 
+  broom::tidy() %>% 
+  select(estimate, conf.low, conf.high)
+```
+
+**Run `prop.test` for each city**
+```{r}
+result_df <- 
+  homd_df %>% 
+  nest(data = uid:status) %>% 
+  mutate(
+    test_results = map(data, prop_test_function),
+    tidy_results = map(test_results, broom::tidy)
+  ) %>% 
+  unnest(tidy_results) %>% 
+  select(city_state, estimate, starts_with("conf"))
+
+result_df
+```
+
+**Make a plot showing estimates and confidence intervals**
+```{r, fig.width = 10}
+result_df %>% 
+  mutate(
+    city_state = fct_reorder(city_state, estimate)
+  ) %>% 
+  ggplot(aes(x = city_state, y = estimate)) + 
+  geom_point() + 
+  geom_errorbar(aes(ymin = conf.low, ymax = conf.high)) + 
+  theme(
+    axis.text.x = element_text(angle = 90, vjust = .5, hjust = 1)) + 
+  labs(
+    x = "City and State",
+    y = "Estimation",
+    title = "Estimates and CIs for each city"
   )
 ```
 
